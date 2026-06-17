@@ -1,0 +1,541 @@
+------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  C:\Users\chansen1\Documents\GitHub\ML_SocSci_short\Stata Code\401kATE.txt
+  log type:  text
+ opened on:  15 Jun 2026, 18:32:02
+
+. 
+. clear all
+
+.  
+. timer on 1 
+
+.  
+. * Load data. Assumes I am in my code subfolder *
+. use "..\Data\sipp1991.dta", clear 
+
+. 
+. *** Set seed for reproducibility
+. set seed 71423
+
+. 
+. * Normalize inc,age,fsize,educ 
+. replace age = age/64
+variable age was byte now float
+(9,915 real changes made)
+
+. replace inc = inc/250000
+(9,912 real changes made)
+
+. replace fsize = fsize/13
+variable fsize was byte now float
+(9,915 real changes made)
+
+. replace educ = educ/18
+variable educ was byte now float
+(9,915 real changes made)
+
+. 
+. * Create polynomials
+. forvalues i = 2/6 {
+  2.         gen age`i' = age^`i' 
+  3. }
+
+. 
+. forvalues i = 2/8 {
+  2.         gen inc`i' = inc^`i'
+  3. }
+
+. 
+. forvalues i = 2/4 {
+  2.         gen educ`i' = educ^`i'
+  3. }
+
+. 
+. gen fsize2 = fsize^2
+
+. 
+. *** Define some macros for our variables
+. global Y net_tfa
+
+. global X age inc educ fsize marr twoearn db pira hown
+
+. global Xpoly age age2 age3 age4 age5 age6 inc inc2 inc3 inc4 inc5 inc6 inc7 ///
+>         inc8 educ educ2 educ3 educ4 fsize fsize2 marr twoearn db pira hown
+
+. global D e401
+
+. 
+. *** Call ddml package and tell it we want to estimate the interactive model (heterogeneous effects)
+. *** using cross-fitting with five folds and with ten different random splits
+. *** of five folds
+. 
+. ddml init interactive, kfolds(5) reps(10)
+
+. 
+. *** add learners for E[Y|D,X]
+. ddml E[Y|X,D]: reg $Y $X
+Learner Y1_reg added successfully.
+
+. ddml E[Y|X,D]: reg $Y $Xpoly
+Learner Y2_reg added successfully.
+
+. ddml E[Y|X,D]: pystacked $Y c.($X)##c.($X) || method(lassocv)
+Learner Y3_pystacked added successfully.
+
+. ddml E[Y|X,D]: pystacked $Y c.($X)##c.($X) || method(ridgecv)
+Learner Y4_pystacked added successfully.
+
+. ddml E[Y|X,D]: pystacked $Y $X || method(rf) ///
+>         opt(n_estimators(500) min_samples_leaf(20) random_state(720))
+Learner Y5_pystacked added successfully.
+
+. ddml E[Y|X,D]: pystacked $Y $X || method(nnet) ///
+>         opt(hidden_layer_sizes(50 50 50 50) alpha(0) random_state(720))
+Learner Y6_pystacked added successfully.
+
+. 
+. *** add learners for E[D|X]
+. ddml E[D|X]: logit $D $X
+Learner D1_logit added successfully.
+
+. ddml E[D|X]: pystacked $D $Xpoly || method(logit) , type(class)
+Learner D2_pystacked added successfully.
+
+. ddml E[D|X]: pystacked $D c.($X)##c.($X) || method(lassocv) , type(class)
+Learner D3_pystacked added successfully.
+
+. ddml E[D|X]: pystacked $D c.($X)##c.($X) || method(ridgecv) , type(class)
+Learner D4_pystacked added successfully.
+
+. ddml E[D|X]: pystacked $D $X || method(rf) ///
+>         opt(n_estimators(500) min_samples_leaf(20) random_state(720)) , type(class)
+Learner D5_pystacked added successfully.
+
+. ddml E[D|X]: pystacked $D $X || method(nnet) ///
+>         opt(hidden_layer_sizes(50 50 50 50) alpha(0) random_state(720)) , type(class)
+Learner D6_pystacked added successfully.
+
+. 
+. ** get info on model specification
+. ddml describe
+
+Model:                  interactive, crossfit folds k=5, resamples r=10
+Mata global (mname):    m0
+Dependent variable (Y): net_tfa
+ net_tfa learners:      Y1_reg Y2_reg Y3_pystacked Y4_pystacked Y5_pystacked Y6_pystacked
+D equations (1):        e401
+ e401 learners:         D1_logit D2_pystacked D3_pystacked D4_pystacked D5_pystacked D6_pystacked
+
+. 
+. ** cross-fitting
+. ddml crossfit , shortstack
+Cross-fitting E[y|X,D] equation: net_tfa
+Resample 1...
+Cross-fitting fold 1 2 3 4 5 ...completed cross-fitting...completed short-stacking
+Resample 2...
+Cross-fitting fold 1 2 3 4 5 ...completed cross-fitting...completed short-stacking
+Resample 3...
+Cross-fitting fold 1 2 3 4 5 ...completed cross-fitting...completed short-stacking
+Resample 4...
+Cross-fitting fold 1 2 3 4 5 ...completed cross-fitting...completed short-stacking
+Resample 5...
+Cross-fitting fold 1 2 3 4 5 ...completed cross-fitting...completed short-stacking
+Resample 6...
+Cross-fitting fold 1 2 3 4 5 ...completed cross-fitting...completed short-stacking
+Resample 7...
+Cross-fitting fold 1 2 3 4 5 ...completed cross-fitting...completed short-stacking
+Resample 8...
+Cross-fitting fold 1 2 3 4 5 ...completed cross-fitting...completed short-stacking
+Resample 9...
+Cross-fitting fold 1 2 3 4 5 ...completed cross-fitting...completed short-stacking
+Resample 10...
+Cross-fitting fold 1 2 3 4 5 ...completed cross-fitting...completed short-stacking
+Cross-fitting E[D|X] equation: e401
+Resample 1...
+Cross-fitting fold 1 2 3 4 5 ...completed cross-fitting...completed short-stacking
+Resample 2...
+Cross-fitting fold 1 2 3 4 5 ...completed cross-fitting...completed short-stacking
+Resample 3...
+Cross-fitting fold 1 2 3 4 5 ...completed cross-fitting...completed short-stacking
+Resample 4...
+Cross-fitting fold 1 2 3 4 5 ...completed cross-fitting...completed short-stacking
+Resample 5...
+Cross-fitting fold 1 2 3 4 5 ...completed cross-fitting...completed short-stacking
+Resample 6...
+Cross-fitting fold 1 2 3 4 5 ...completed cross-fitting...completed short-stacking
+Resample 7...
+Cross-fitting fold 1 2 3 4 5 ...completed cross-fitting...completed short-stacking
+Resample 8...
+Cross-fitting fold 1 2 3 4 5 ...completed cross-fitting...completed short-stacking
+Resample 9...
+Cross-fitting fold 1 2 3 4 5 ...completed cross-fitting...completed short-stacking
+Resample 10...
+Cross-fitting fold 1 2 3 4 5 ...completed cross-fitting...completed short-stacking
+
+. 
+. *** Estimation results
+. ddml estimate, robust
+
+
+Model:                  interactive, crossfit folds k=5, resamples r=10
+Mata global (mname):    m0
+Dependent variable (Y): net_tfa
+ net_tfa learners:      Y1_reg Y2_reg Y3_pystacked Y4_pystacked Y5_pystacked Y6_pystacked
+D equations (1):        e401
+ e401 learners:         D1_logit D2_pystacked D3_pystacked D4_pystacked D5_pystacked D6_pystacked
+
+DDML estimation results (ATE):
+spec  r  Y(0) learner  Y(1) learner     D learner         b        SE 
+ mse  1  Y3_pystacked  Y4_pystacked  D4_pystacked  8718.933 (1212.034)
+  ss  1  [shortstack]          [ss]          [ss]  8364.102 (1135.705)
+ mse  2  Y4_pystacked  Y6_pystacked  D3_pystacked  8479.435 (1183.030)
+  ss  2  [shortstack]          [ss]          [ss]  7985.016 (1146.767)
+ mse  3  Y3_pystacked  Y4_pystacked  D3_pystacked  8444.794 (1195.196)
+  ss  3  [shortstack]          [ss]          [ss]  7500.647 (1314.178)
+ mse  4  Y3_pystacked  Y6_pystacked  D3_pystacked  8613.142 (1220.858)
+  ss  4  [shortstack]          [ss]          [ss]  8198.731 (1141.890)
+ mse  5  Y3_pystacked  Y6_pystacked  D3_pystacked  8618.214 (1199.626)
+  ss  5  [shortstack]          [ss]          [ss]  8136.630 (1138.729)
+ mse  6  Y3_pystacked  Y6_pystacked  D3_pystacked  8630.557 (1166.983)
+  ss  6  [shortstack]          [ss]          [ss]  7983.899 (1170.579)
+ mse  7  Y4_pystacked  Y6_pystacked  D3_pystacked  8610.827 (1183.927)
+  ss  7  [shortstack]          [ss]          [ss]  8135.282 (1116.582)
+ mse  8  Y3_pystacked  Y3_pystacked  D3_pystacked  7633.057 (1161.506)
+  ss  8  [shortstack]          [ss]          [ss]  7240.420 (1274.815)
+ mse  9  Y4_pystacked  Y6_pystacked  D3_pystacked  8446.439 (1192.984)
+  ss  9  [shortstack]          [ss]          [ss]  8098.847 (1151.736)
+ mse 10  Y3_pystacked  Y6_pystacked  D3_pystacked  8366.434 (1164.897)
+  ss 10  [shortstack]          [ss]          [ss]  8105.021 (1130.115)
+mse = minimum MSE specification for that resample.
+
+Mean/med Y(0) learner  Y(1) learner     D learner         b        SE 
+ mse mn     [min-mse]     [min-mse]     [min-mse]  8456.183 (1216.699)
+  ss mn  [shortstack]          [ss]          [ss]  7974.860 (1198.960)
+ mse md     [min-mse]     [min-mse]     [min-mse]  8545.131 (1198.230)
+  ss md  [shortstack]          [ss]          [ss]  8101.934 (1152.226)
+
+Shortstack DDML model (median over 10 resamples) (ATE)
+E[y|X,D=0]   = Y_net_tfa_ss0                       Number of obs   =      9915
+E[y|X,D=1]   = Y_net_tfa_ss1
+E[D|X]       = D_e401_ss
+------------------------------------------------------------------------------
+             |               Robust
+     net_tfa | Coefficient  std. err.      z    P>|z|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+        e401 |   8101.934   1152.226     7.03   0.000     5843.612    10360.26
+------------------------------------------------------------------------------
+Stacking final estimator: nnls1
+
+Summary over 10 resamples:
+       D eqn      mean       min       p25       p50       p75       max
+        e401   7974.8596 7240.4199 7983.8989 8101.9336 8136.6304 8364.1025
+
+. 
+. /* Hangs on my laptop
+> *** More estimation results
+> ddml estimate, allcombos robust
+> */
+. 
+. *** Look at out of sample performance 
+. ddml extract, show(mse)
+
+MSEs for e401:
+                 rep   full smp      fold 1      fold 2      fold 3      fold 4      fold 5 
+        D1_logit   1      0.201       0.199       0.200       0.211       0.198       0.198  
+        D1_logit  10      0.201       0.201       0.206       0.205       0.198       0.196  
+        D1_logit   2      0.201       0.205       0.197       0.204       0.199       0.201  
+        D1_logit   3      0.201       0.201       0.194       0.201       0.202       0.209  
+        D1_logit   4      0.201       0.203       0.202       0.201       0.200       0.201  
+        D1_logit   5      0.201       0.202       0.196       0.202       0.203       0.204  
+        D1_logit   6      0.201       0.200       0.204       0.205       0.194       0.203  
+        D1_logit   7      0.201       0.200       0.203       0.204       0.201       0.200  
+        D1_logit   8      0.201       0.204       0.202       0.199       0.204       0.199  
+        D1_logit   9      0.201       0.205       0.208       0.199       0.193       0.202  
+    D2_pystacked   1      0.198       0.196       0.196       0.207       0.194       0.196  
+    D2_pystacked  10      0.198       0.198       0.203       0.201       0.194       0.192  
+    D2_pystacked   2      0.198       0.199       0.195       0.202       0.198       0.196  
+    D2_pystacked   3      0.198       0.197       0.191       0.196       0.199       0.207  
+    D2_pystacked   4      0.198       0.200       0.199       0.197       0.195       0.198  
+    D2_pystacked   5      0.198       0.198       0.191       0.199       0.200       0.200  
+    D2_pystacked   6      0.198       0.197       0.200       0.201       0.190       0.201  
+    D2_pystacked   7      0.198       0.198       0.198       0.200       0.197       0.198  
+    D2_pystacked   8      0.198       0.200       0.197       0.196       0.202       0.194  
+    D2_pystacked   9      0.198       0.200       0.202       0.198       0.189       0.200  
+    D3_pystacked   1      0.197       0.196       0.195       0.207       0.195       0.195  
+    D3_pystacked  10      0.197       0.197       0.202       0.199       0.195       0.192  
+    D3_pystacked   2      0.197       0.198       0.194       0.202       0.197       0.196  
+    D3_pystacked   3      0.197       0.198       0.191       0.196       0.197       0.205  
+    D3_pystacked   4      0.197       0.201       0.197       0.197       0.195       0.198  
+    D3_pystacked   5      0.197       0.198       0.189       0.199       0.199       0.200  
+    D3_pystacked   6      0.197       0.195       0.200       0.201       0.190       0.200  
+    D3_pystacked   7      0.198       0.197       0.199       0.199       0.196       0.199  
+    D3_pystacked   8      0.197       0.199       0.199       0.195       0.200       0.192  
+    D3_pystacked   9      0.198       0.201       0.203       0.197       0.189       0.198  
+    D4_pystacked   1      0.197       0.195       0.195       0.207       0.195       0.194  
+    D4_pystacked  10      0.198       0.197       0.203       0.201       0.195       0.194  
+    D4_pystacked   2      0.198       0.198       0.194       0.202       0.198       0.198  
+    D4_pystacked   3      0.198       0.196       0.191       0.199       0.199       0.207  
+    D4_pystacked   4      0.198       0.201       0.198       0.198       0.195       0.197  
+    D4_pystacked   5      0.197       0.199       0.189       0.199       0.199       0.199  
+    D4_pystacked   6      0.198       0.195       0.201       0.203       0.191       0.201  
+    D4_pystacked   7      0.198       0.196       0.201       0.201       0.195       0.198  
+    D4_pystacked   8      0.198       0.198       0.199       0.197       0.199       0.195  
+    D4_pystacked   9      0.199       0.202       0.205       0.196       0.191       0.198  
+    D5_pystacked   1      0.199       0.197       0.195       0.208       0.195       0.197  
+    D5_pystacked  10      0.199       0.200       0.203       0.200       0.197       0.194  
+    D5_pystacked   2      0.198       0.199       0.196       0.202       0.200       0.195  
+    D5_pystacked   3      0.199       0.199       0.190       0.200       0.199       0.208  
+    D5_pystacked   4      0.199       0.202       0.200       0.198       0.196       0.200  
+    D5_pystacked   5      0.198       0.198       0.193       0.201       0.200       0.199  
+    D5_pystacked   6      0.199       0.198       0.203       0.200       0.192       0.202  
+    D5_pystacked   7      0.199       0.199       0.198       0.201       0.195       0.200  
+    D5_pystacked   8      0.199       0.200       0.200       0.196       0.204       0.194  
+    D5_pystacked   9      0.199       0.203       0.205       0.201       0.193       0.195  
+    D6_pystacked   1      0.205       0.201       0.204       0.214       0.201       0.204  
+    D6_pystacked  10      0.203       0.209       0.205       0.200       0.200       0.200  
+    D6_pystacked   2      0.205       0.208       0.201       0.202       0.205       0.208  
+    D6_pystacked   3      0.207       0.205       0.201       0.205       0.210       0.215  
+    D6_pystacked   4      0.205       0.208       0.208       0.207       0.196       0.206  
+    D6_pystacked   5      0.204       0.201       0.200       0.211       0.201       0.206  
+    D6_pystacked   6      0.206       0.207       0.210       0.204       0.200       0.210  
+    D6_pystacked   7      0.202       0.207       0.200       0.206       0.196       0.202  
+    D6_pystacked   8      0.206       0.203       0.209       0.210       0.209       0.200  
+    D6_pystacked   9      0.206       0.212       0.210       0.202       0.199       0.207  
+       D_e401_ss   1      0.176       0.174       0.177       0.187       0.170       0.172  
+       D_e401_ss  10      0.175       0.182       0.173       0.170       0.169       0.178  
+       D_e401_ss   2      0.176       0.173       0.178       0.175       0.175       0.180  
+       D_e401_ss   3      0.175       0.176       0.171       0.175       0.178       0.174  
+       D_e401_ss   4      0.176       0.180       0.179       0.173       0.176       0.172  
+       D_e401_ss   5      0.174       0.174       0.174       0.171       0.173       0.179  
+       D_e401_ss   6      0.175       0.177       0.177       0.180       0.172       0.170  
+       D_e401_ss   7      0.174       0.172       0.172       0.175       0.178       0.174  
+       D_e401_ss   8      0.175       0.178       0.171       0.176       0.182       0.169  
+       D_e401_ss   9      0.176       0.182       0.173       0.174       0.180       0.171  
+
+MSEs for net_tfa:
+                D=  rep   full smp      fold 1      fold 2      fold 3      fold 4      fold 5 
+          Y1_reg 0    1  2.424e+09   1.606e+09   2.808e+09   2.437e+09   2.113e+09   3.133e+09  
+          Y1_reg 1    1  4.237e+09   5.132e+09   3.619e+09   2.214e+09   3.804e+09   6.614e+09  
+          Y1_reg 0   10  2.425e+09   2.201e+09   1.677e+09   2.471e+09   3.503e+09   2.251e+09  
+          Y1_reg 1   10  4.244e+09   3.609e+09   5.461e+09   3.777e+09   3.775e+09   4.541e+09  
+          Y1_reg 0    2  2.446e+09   3.721e+09   2.587e+09   9.102e+08   1.824e+09   3.175e+09  
+          Y1_reg 1    2  4.236e+09   3.598e+09   4.668e+09   3.856e+09   5.112e+09   3.969e+09  
+          Y1_reg 0    3  2.448e+09   1.245e+09   1.481e+09   4.709e+09   3.585e+09   1.112e+09  
+          Y1_reg 1    3  4.253e+09   4.709e+09   4.078e+09   3.596e+09   1.976e+09   6.702e+09  
+          Y1_reg 0    4  2.450e+09   1.065e+09   8.656e+08   3.520e+09   2.979e+09   3.848e+09  
+          Y1_reg 1    4  4.245e+09   2.366e+09   4.039e+09   8.150e+09   4.646e+09   1.992e+09  
+          Y1_reg 0    5  2.429e+09   1.376e+09   4.851e+09   1.476e+09   2.692e+09   1.765e+09  
+          Y1_reg 1    5  4.247e+09   3.694e+09   1.974e+09   6.643e+09   6.073e+09   2.918e+09  
+          Y1_reg 0    6  2.432e+09   7.444e+08   3.652e+09   2.179e+09   3.548e+09   2.055e+09  
+          Y1_reg 1    6  4.254e+09   2.928e+09   6.813e+09   2.051e+09   2.370e+09   7.008e+09  
+          Y1_reg 0    7  2.424e+09   2.375e+09   2.194e+09   3.450e+09   2.421e+09   1.684e+09  
+          Y1_reg 1    7  4.248e+09   2.714e+09   1.539e+09   5.989e+09   3.997e+09   6.903e+09  
+          Y1_reg 0    8  2.417e+09   2.173e+09   2.147e+09   2.584e+09   2.874e+09   2.298e+09  
+          Y1_reg 1    8  4.277e+09   8.826e+09   3.471e+09   1.959e+09   3.963e+09   3.292e+09  
+          Y1_reg 0    9  2.459e+09   1.985e+09   4.689e+09   2.199e+09   1.015e+09   2.477e+09  
+          Y1_reg 1    9  4.256e+09   8.777e+09   4.394e+09   2.517e+09   2.124e+09   3.331e+09  
+          Y2_reg 0    1  8.893e+10   4.359e+11   2.228e+09   2.557e+09   2.097e+09   3.082e+09  
+          Y2_reg 1    1  5.563e+09   4.858e+09   2.907e+09   1.995e+09   1.128e+10   7.006e+09  
+          Y2_reg 0   10  1.094e+11   2.146e+09   1.756e+09   2.519e+09   3.565e+09   5.360e+11  
+          Y2_reg 1   10  5.477e+09   3.888e+09   5.080e+09   3.933e+09   1.002e+10   4.531e+09  
+          Y2_reg 0    2  2.088e+10   9.642e+10   2.522e+09   8.738e+08   1.745e+09   3.231e+09  
+          Y2_reg 1    2  5.467e+09   2.933e+09   4.600e+09   1.048e+10   5.041e+09   4.190e+09  
+          Y2_reg 0    3  1.311e+10   1.206e+09   1.421e+09   4.426e+09   5.668e+10   1.122e+09  
+          Y2_reg 1    3  4.737e+09   4.327e+09   6.344e+09   3.495e+09   2.026e+09   7.312e+09  
+          Y2_reg 0    4  5.201e+10   1.030e+09   7.754e+08   2.528e+11   2.522e+09   4.025e+09  
+          Y2_reg 1    4  5.809e+09   2.102e+09   4.370e+09   7.498e+09   4.450e+09   1.041e+10  
+          Y2_reg 0    5  7.376e+10   1.387e+09   4.926e+09   1.422e+09   2.138e+09   3.602e+11  
+          Y2_reg 1    5  5.365e+09   1.036e+10   2.008e+09   6.092e+09   5.567e+09   2.782e+09  
+          Y2_reg 0    6  9.294e+10   6.876e+08   2.781e+09   4.510e+11   3.506e+09   1.948e+09  
+          Y2_reg 1    6  5.705e+09   2.395e+09   1.474e+10   2.299e+09   2.540e+09   6.346e+09  
+          Y2_reg 0    7  9.045e+10   2.394e+09   2.290e+09   4.432e+11   2.401e+09   1.115e+09  
+          Y2_reg 1    7  5.604e+09   7.252e+09   1.537e+09   5.221e+09   4.251e+09   9.704e+09  
+          Y2_reg 0    8  6.088e+10   2.131e+09   3.004e+11   2.547e+09   1.952e+09   2.294e+09  
+          Y2_reg 1    8  5.770e+09   8.137e+09   4.697e+09   8.599e+09   3.947e+09   3.360e+09  
+          Y2_reg 0    9  2.423e+11   1.374e+09   1.217e+12   2.136e+09   1.079e+09   2.449e+09  
+          Y2_reg 1    9  1.203e+10   8.096e+09   3.949e+09   4.271e+10   1.999e+09   3.462e+09  
+    Y3_pystacked 0    1  2.150e+09   1.010e+09   2.166e+09   2.488e+09   2.051e+09   3.009e+09  
+    Y3_pystacked 1    1  4.051e+09   4.947e+09   3.177e+09   1.993e+09   3.759e+09   6.593e+09  
+    Y3_pystacked 0   10  2.139e+09   2.150e+09   1.583e+09   1.944e+09   3.458e+09   1.538e+09  
+    Y3_pystacked 1   10  4.125e+09   3.710e+09   5.092e+09   3.756e+09   3.716e+09   4.305e+09  
+    Y3_pystacked 0    2  2.287e+09   3.049e+09   2.640e+09   8.169e+08   1.838e+09   3.077e+09  
+    Y3_pystacked 1    2  4.058e+09   3.202e+09   4.401e+09   3.771e+09   4.988e+09   3.948e+09  
+    Y3_pystacked 0    3  2.159e+09   1.316e+09   1.493e+09   4.004e+09   2.823e+09   1.074e+09  
+    Y3_pystacked 1    3  4.094e+09   4.494e+09   3.564e+09   3.319e+09   2.118e+09   6.759e+09  
+    Y3_pystacked 0    4  2.172e+09   1.156e+09   8.989e+08   2.654e+09   2.404e+09   3.773e+09  
+    Y3_pystacked 1    4  4.083e+09   2.169e+09   4.137e+09   7.703e+09   4.538e+09   1.833e+09  
+    Y3_pystacked 0    5  2.150e+09   1.320e+09   4.777e+09   1.379e+09   2.083e+09   1.198e+09  
+    Y3_pystacked 1    5  4.108e+09   3.719e+09   1.977e+09   6.134e+09   5.715e+09   3.052e+09  
+    Y3_pystacked 0    6  2.141e+09   8.163e+08   3.035e+09   1.424e+09   3.473e+09   1.977e+09  
+    Y3_pystacked 1    6  4.123e+09   2.842e+09   7.033e+09   2.027e+09   2.111e+09   6.499e+09  
+    Y3_pystacked 0    7  2.153e+09   2.323e+09   2.112e+09   2.732e+09   2.426e+09   1.179e+09  
+    Y3_pystacked 1    7  4.115e+09   2.884e+09   1.656e+09   5.476e+09   3.814e+09   6.659e+09  
+    Y3_pystacked 0    8  2.143e+09   2.151e+09   1.478e+09   2.578e+09   2.297e+09   2.203e+09  
+    Y3_pystacked 1    8  4.151e+09   8.288e+09   3.723e+09   1.835e+09   3.836e+09   3.187e+09  
+    Y3_pystacked 0    9  2.150e+09   1.504e+09   3.765e+09   2.183e+09   9.426e+08   2.414e+09  
+    Y3_pystacked 1    9  4.128e+09   8.306e+09   4.385e+09   2.749e+09   1.878e+09   3.181e+09  
+    Y4_pystacked 0    1  2.160e+09   1.024e+09   2.151e+09   2.509e+09   2.053e+09   3.036e+09  
+    Y4_pystacked 1    1  4.034e+09   4.945e+09   2.885e+09   2.006e+09   3.855e+09   6.705e+09  
+    Y4_pystacked 0   10  2.206e+09   2.153e+09   1.584e+09   2.292e+09   3.475e+09   1.503e+09  
+    Y4_pystacked 1   10  4.071e+09   3.749e+09   4.792e+09   3.791e+09   3.749e+09   4.241e+09  
+    Y4_pystacked 0    2  2.286e+09   2.997e+09   2.647e+09   8.419e+08   1.838e+09   3.090e+09  
+    Y4_pystacked 1    2  4.138e+09   3.510e+09   4.267e+09   3.866e+09   5.062e+09   4.000e+09  
+    Y4_pystacked 0    3  2.274e+09   1.337e+09   1.500e+09   4.510e+09   2.829e+09   1.101e+09  
+    Y4_pystacked 1    3  4.067e+09   4.480e+09   3.396e+09   3.286e+09   2.153e+09   6.801e+09  
+    Y4_pystacked 0    4  2.182e+09   1.176e+09   9.591e+08   2.651e+09   2.383e+09   3.772e+09  
+    Y4_pystacked 1    4  4.096e+09   2.282e+09   4.260e+09   7.412e+09   4.536e+09   1.958e+09  
+    Y4_pystacked 0    5  2.155e+09   1.349e+09   4.802e+09   1.397e+09   2.031e+09   1.200e+09  
+    Y4_pystacked 1    5  4.185e+09   3.785e+09   2.209e+09   5.823e+09   6.064e+09   3.077e+09  
+    Y4_pystacked 0    6  2.146e+09   8.237e+08   3.037e+09   1.426e+09   3.477e+09   1.987e+09  
+    Y4_pystacked 1    6  4.252e+09   2.834e+09   7.070e+09   2.065e+09   2.216e+09   6.970e+09  
+    Y4_pystacked 0    7  2.145e+09   2.339e+09   2.132e+09   2.723e+09   2.440e+09   1.095e+09  
+    Y4_pystacked 1    7  4.120e+09   2.931e+09   1.715e+09   5.220e+09   3.802e+09   6.851e+09  
+    Y4_pystacked 0    8  2.156e+09   2.179e+09   1.511e+09   2.601e+09   2.271e+09   2.213e+09  
+    Y4_pystacked 1    8  4.308e+09   8.845e+09   3.804e+09   1.835e+09   3.855e+09   3.320e+09  
+    Y4_pystacked 0    9  2.147e+09   1.512e+09   3.704e+09   2.186e+09   9.712e+08   2.420e+09  
+    Y4_pystacked 1    9  4.239e+09   8.762e+09   4.414e+09   2.801e+09   1.803e+09   3.264e+09  
+    Y5_pystacked 0    1  2.322e+09   1.669e+09   2.694e+09   2.355e+09   2.109e+09   2.772e+09  
+    Y5_pystacked 1    1  4.228e+09   5.241e+09   3.587e+09   2.108e+09   3.845e+09   6.557e+09  
+    Y5_pystacked 0   10  2.326e+09   2.121e+09   1.563e+09   2.435e+09   3.170e+09   2.319e+09  
+    Y5_pystacked 1   10  4.233e+09   3.506e+09   5.505e+09   3.695e+09   4.071e+09   4.329e+09  
+    Y5_pystacked 0    2  2.324e+09   3.566e+09   2.388e+09   8.330e+08   1.736e+09   3.088e+09  
+    Y5_pystacked 1    2  4.199e+09   3.563e+09   4.498e+09   3.673e+09   5.295e+09   3.987e+09  
+    Y5_pystacked 0    3  2.365e+09   1.261e+09   1.451e+09   4.435e+09   3.466e+09   1.111e+09  
+    Y5_pystacked 1    3  4.226e+09   4.831e+09   4.021e+09   3.530e+09   1.886e+09   6.652e+09  
+    Y5_pystacked 0    4  2.367e+09   1.124e+09   8.054e+08   3.363e+09   2.731e+09   3.838e+09  
+    Y5_pystacked 1    4  4.212e+09   2.244e+09   4.027e+09   8.045e+09   4.722e+09   1.986e+09  
+    Y5_pystacked 0    5  2.339e+09   1.373e+09   4.538e+09   1.496e+09   2.514e+09   1.783e+09  
+    Y5_pystacked 1    5  4.233e+09   3.708e+09   1.900e+09   6.661e+09   5.910e+09   3.057e+09  
+    Y5_pystacked 0    6  2.309e+09   8.384e+08   3.467e+09   2.066e+09   3.270e+09   1.919e+09  
+    Y5_pystacked 1    6  4.212e+09   2.981e+09   6.865e+09   2.155e+09   2.152e+09   6.807e+09  
+    Y5_pystacked 0    7  2.318e+09   2.404e+09   1.953e+09   3.256e+09   2.379e+09   1.604e+09  
+    Y5_pystacked 1    7  4.240e+09   2.795e+09   1.557e+09   5.882e+09   4.042e+09   6.828e+09  
+    Y5_pystacked 0    8  2.301e+09   1.954e+09   2.238e+09   2.396e+09   2.749e+09   2.164e+09  
+    Y5_pystacked 1    8  4.287e+09   8.775e+09   3.605e+09   1.939e+09   3.937e+09   3.300e+09  
+    Y5_pystacked 0    9  2.408e+09   2.042e+09   4.540e+09   2.145e+09   9.818e+08   2.401e+09  
+    Y5_pystacked 1    9  4.239e+09   8.669e+09   4.627e+09   2.529e+09   1.872e+09   3.341e+09  
+    Y6_pystacked 0    1  2.247e+09   1.353e+09   2.437e+09   2.406e+09   2.035e+09   2.982e+09  
+    Y6_pystacked 1    1  4.043e+09   4.984e+09   3.234e+09   1.938e+09   3.703e+09   6.567e+09  
+    Y6_pystacked 0   10  2.221e+09   2.124e+09   1.575e+09   2.094e+09   3.411e+09   1.880e+09  
+    Y6_pystacked 1   10  4.052e+09   3.558e+09   4.996e+09   3.732e+09   3.654e+09   4.276e+09  
+    Y6_pystacked 0    2  2.348e+09   3.220e+09   2.669e+09   8.546e+08   1.898e+09   3.083e+09  
+    Y6_pystacked 1    2  4.036e+09   3.273e+09   4.323e+09   3.709e+09   4.986e+09   3.908e+09  
+    Y6_pystacked 0    3  2.253e+09   1.332e+09   1.521e+09   4.178e+09   3.087e+09   1.051e+09  
+    Y6_pystacked 1    3  4.077e+09   4.516e+09   3.731e+09   3.288e+09   2.038e+09   6.605e+09  
+    Y6_pystacked 0    4  2.303e+09   1.252e+09   9.404e+08   3.054e+09   2.587e+09   3.704e+09  
+    Y6_pystacked 1    4  4.075e+09   2.135e+09   4.164e+09   7.652e+09   4.554e+09   1.835e+09  
+    Y6_pystacked 0    5  2.245e+09   1.316e+09   4.781e+09   1.379e+09   2.273e+09   1.487e+09  
+    Y6_pystacked 1    5  4.084e+09   3.724e+09   2.002e+09   6.196e+09   5.631e+09   2.924e+09  
+    Y6_pystacked 0    6  2.225e+09   8.422e+08   3.207e+09   1.711e+09   3.431e+09   1.952e+09  
+    Y6_pystacked 1    6  4.083e+09   2.761e+09   6.831e+09   2.044e+09   2.118e+09   6.564e+09  
+    Y6_pystacked 0    7  2.189e+09   2.265e+09   2.045e+09   2.985e+09   2.365e+09   1.291e+09  
+    Y6_pystacked 1    7  4.073e+09   2.795e+09   1.603e+09   5.520e+09   3.820e+09   6.543e+09  
+    Y6_pystacked 0    8  2.238e+09   2.173e+09   1.779e+09   2.516e+09   2.497e+09   2.217e+09  
+    Y6_pystacked 1    8  4.179e+09   8.354e+09   3.780e+09   1.910e+09   3.782e+09   3.175e+09  
+    Y6_pystacked 0    9  2.248e+09   1.659e+09   4.099e+09   2.204e+09   9.299e+08   2.411e+09  
+    Y6_pystacked 1    9  4.083e+09   8.253e+09   4.315e+09   2.596e+09   1.884e+09   3.228e+09  
+    Y_net_tfa_ss 0    1  1.089e+09   2.330e+09   9.722e+08   8.268e+08   6.040e+08   7.212e+08  
+    Y_net_tfa_ss 1    1  2.529e+09   2.544e+09   2.329e+09   2.431e+09   2.621e+09   2.738e+09  
+    Y_net_tfa_ss 0   10  1.088e+09   8.069e+08   7.606e+08   9.691e+08   6.842e+08   2.219e+09  
+    Y_net_tfa_ss 1   10  2.489e+09   2.872e+09   2.548e+09   2.215e+09   2.372e+09   2.444e+09  
+    Y_net_tfa_ss 0    2  7.981e+08   7.534e+08   7.973e+08   8.000e+08   8.762e+08   7.635e+08  
+    Y_net_tfa_ss 1    2  2.461e+09   2.016e+09   2.488e+09   2.360e+09   3.032e+09   2.417e+09  
+    Y_net_tfa_ss 0    3  1.083e+09   7.224e+08   7.506e+08   8.484e+08   2.185e+09   8.957e+08  
+    Y_net_tfa_ss 1    3  2.574e+09   2.312e+09   2.385e+09   2.288e+09   2.722e+09   3.130e+09  
+    Y_net_tfa_ss 0    4  1.119e+09   8.837e+08   1.162e+09   2.244e+09   8.163e+08   4.949e+08  
+    Y_net_tfa_ss 1    4  2.500e+09   2.085e+09   2.807e+09   2.167e+09   2.722e+09   2.702e+09  
+    Y_net_tfa_ss 0    5  1.097e+09   6.771e+08   7.849e+08   8.055e+08   7.947e+08   2.430e+09  
+    Y_net_tfa_ss 1    5  2.437e+09   2.375e+09   2.627e+09   2.309e+09   2.178e+09   2.695e+09  
+    Y_net_tfa_ss 0    6  1.096e+09   7.854e+08   8.603e+08   2.181e+09   6.810e+08   9.590e+08  
+    Y_net_tfa_ss 1    6  2.456e+09   2.356e+09   2.177e+09   2.253e+09   3.152e+09   2.342e+09  
+    Y_net_tfa_ss 0    7  1.098e+09   9.350e+08   7.469e+08   2.265e+09   7.358e+08   8.024e+08  
+    Y_net_tfa_ss 1    7  2.463e+09   2.964e+09   2.412e+09   2.612e+09   2.201e+09   2.142e+09  
+    Y_net_tfa_ss 0    8  1.119e+09   1.068e+09   2.288e+09   7.568e+08   7.943e+08   7.085e+08  
+    Y_net_tfa_ss 1    8  2.502e+09   2.243e+09   3.712e+09   2.422e+09   2.227e+09   1.855e+09  
+    Y_net_tfa_ss 0    9  1.077e+09   1.120e+09   2.248e+09   5.986e+08   7.963e+08   6.351e+08  
+    Y_net_tfa_ss 1    9  2.461e+09   2.477e+09   2.129e+09   2.899e+09   2.729e+09   2.106e+09  
+
+. 
+. *** Look at stacking weights
+. ddml extract, show(ssweights)
+
+short-stacked weights across resamples for e401
+final stacking estimator: nnls1
+                  learner  mean_weight        rep_1        rep_2        rep_3        rep_4        rep_5        rep_6
+    D1_logit            1    1.003e-17    1.038e-17    1.415e-17            0            0            0    3.212e-17
+D2_pystacked            2    .25516955    .26403028    .22372082     .2313523    .27545844    .23375791    .24240474
+D3_pystacked            3    .26195496    .10572434    .34045223    .37833278    .16563419     .0522017    .40855959
+D4_pystacked            4    .09376101    .24315731     .0002099    .03164983    .21946244     .3096182    6.720e-17
+D5_pystacked            5    .28967168    .29342302    .29973453    .28868211    .26337174    .31005898    .31246456
+D6_pystacked            6    .09944279    .09366505    .13588251    .06998298    .07607319    .09436321    .03657111
+
+                    rep_7        rep_8        rep_9       rep_10
+    D1_logit    2.673e-17    1.688e-17            0            0
+D2_pystacked    .30890973     .2360851    .28793391    .24804229
+D3_pystacked    .14085618    .38270458    .31218647    .33289757
+D4_pystacked    .07969603    .03373656    .02007982            0
+D5_pystacked    .29923949    .26173751    .27861066    .28939423
+D6_pystacked    .17129858    .08573626    .10118916    .12966591
+
+short-stacked weights across resamples for net_tfa
+final stacking estimator: nnls1
+                  learner        D=0/1  mean_weight        rep_1        rep_2        rep_3        rep_4        rep_5
+      Y1_reg            1            0    .07697235    .12443379    .11823016    .03415249      .090399    .03798222
+      Y2_reg            2            0    .03861239    .03604389            0    .09090225    .04915898    .03718033
+Y3_pystacked            3            0    .28350919    .07481243            0    .68859317    .20372382    .38478933
+Y4_pystacked            4            0    .29975422    .47526782    .57372329            0    .44468558    .29029748
+Y5_pystacked            5            0    .23491201    .28944207    .30804655    .14892692    .21203261    .24975064
+Y6_pystacked            6            0    .06623984            0            0    .03742517            0            0
+      Y1_reg            1            1    .05286663    .03948635            0    .07906514    .12525168            0
+      Y2_reg            2            1    .10518023    .13548357    .10269676    .19902966    .11368525    .14034059
+Y3_pystacked            3            1    .16236036    .05887995    .26207364            0            0    .33804693
+Y4_pystacked            4            1    .28315021     .6744044    .06072237    .68350997    .56028925            0
+Y5_pystacked            5            1    .00940221            0            0            0            0            0
+Y6_pystacked            6            1    .38704036    .09174573    .57450723    .03839523    .20077382    .52161248
+
+                    rep_6        rep_7        rep_8        rep_9       rep_10
+      Y1_reg    .07255389    .06253701    .06152076    .12297249    .04494166
+      Y2_reg    .03686895    .03679291    .04632281    .02067651    .03217726
+Y3_pystacked    .30191484            0    .30007136    .36605901    .51512799
+Y4_pystacked    .23288295     .3853959    .26244811    .33284105            0
+Y5_pystacked    .32871825    .26380542    .32963695    .02267369    .19608698
+Y6_pystacked    .02706113    .25146875    6.574e-14    .13477725     .2116661
+      Y1_reg            0    .06794428    .03001149    .08586624    .10104116
+      Y2_reg    .09816927    .09016846    .11198736            0    .06024133
+Y3_pystacked    .20344175            0    .61428125     .1468801            0
+Y4_pystacked            0    .35552568            0            0    .49705047
+Y5_pystacked    .05203969            0    .00143853    .04054383            0
+Y6_pystacked    .64634929    .48636158    .24228137    .72670983    .34166705
+
+. 
+. *** Look at overlap plot for stacked propensity score
+. ddml overlap , pslist(D_e401_ss)
+
+. graph export ..\Slides\figures\Stata_401kStackedPS.png , replace
+file ..\Slides\figures\Stata_401kStackedPS.png saved as PNG format
+
+. graph close
+
+. 
+. *** Save data including predicted values and fold variable for use in further 
+. *** downstream diagnostics
+. save "..\Data\401kATE.dta" , replace
+file ..\Data\401kATE.dta saved
+
+. 
+. 
+. timer off 1
+
+. timer list
+   1:   1873.28 /        1 =    1873.2760
+
+. timer clear
+
+. 
+. log close
+      name:  <unnamed>
+       log:  C:\Users\chansen1\Documents\GitHub\ML_SocSci_short\Stata Code\401kATE.txt
+  log type:  text
+ closed on:  15 Jun 2026, 19:03:15
+------------------------------------------------------------------------------------------------------------------------

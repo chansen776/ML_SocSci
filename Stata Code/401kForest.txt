@@ -1,0 +1,611 @@
+------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  C:\Users\chansen1\Documents\GitHub\ML_SocSci_short\Stata Code\401kForest.txt
+  log type:  text
+ opened on:  15 Jun 2026, 18:15:42
+
+. 
+. clear all
+
+. timer clear 1
+
+. timer on 1
+
+. 
+. use "..\Data\sipp1991.dta", clear  /* Load data. Assumes I am in my code subfolder */
+
+. 
+. *** Set seed for reproducibility (governs the train/test split only)
+. set seed 71423
+
+. 
+. *** Split data into a training (~80%) and test (~20%) set
+. gen trdata = runiform()
+
+. replace trdata = trdata < .8
+(9,915 real changes made)
+
+. 
+. * Sample sizes
+. count if trdata
+  7,854
+
+. count if !trdata
+  2,061
+
+. 
+. *** Hand off to Python for all RF fits
+. python:
+----------------------------------------------- python (type end to exit) ----------------------------------
+>>> 
+>>> import numpy as np
+>>> import pandas as pd
+>>> from sfi import Data
+>>> from sklearn.ensemble import RandomForestRegressor
+>>> import matplotlib
+>>> matplotlib.use("Agg")
+>>> import matplotlib.pyplot as plt
+>>> 
+>>> # -----------------------------------------------------------------------------
+... # Pull data from Stata into numpy
+... # -----------------------------------------------------------------------------
+... Xcols = ["e401", "age", "inc", "educ", "fsize", "marr", "twoearn",
+...          "db", "pira", "hown"]
+>>> X = np.asarray(Data.get(" ".join(Xcols)))
+>>> y = np.asarray(Data.get("net_tfa"))
+>>> T = np.asarray(Data.get("trdata"))
+>>> 
+>>> X_train = X[T == 1]
+>>> y_train = y[T == 1]
+>>> X_test  = X[T == 0]
+>>> y_test  = y[T == 0]
+>>> 
+>>> y_train_mean = float(y_train.mean())
+>>> 
+>>> def val_r2(model):
+...     sse = np.sum((y_test - model.predict(X_test)) ** 2)
+...     sst = np.sum((y_test - y_train_mean) ** 2)
+...     return 1.0 - sse / sst
+... 
+>>> def oob_rmse_of(model):
+...     pred = model.oob_prediction_
+...     return float(np.sqrt(np.mean((y_train - pred) ** 2)))
+... 
+... # -----------------------------------------------------------------------------
+>>> # (a) OOB RMSE vs. number of trees
+... #     warm_start=True grows the forest incrementally -- only the newly added
+... #     trees are fit at each step, so the full sweep is fast.
+... # -----------------------------------------------------------------------------
+... rf_curve = RandomForestRegressor(
+...     n_estimators=1,
+...     warm_start=True,
+...     bootstrap=True,
+...     oob_score=True,
+...     max_features="sqrt",
+...     random_state=720,
+...     n_jobs=1,
+... )
+>>> 
+>>> iters = list(range(1, 2002, 20))
+>>> oob_rmse_vals = []
+>>> for i in iters:
+...     rf_curve.set_params(n_estimators=i)
+...     rf_curve.fit(X_train, y_train)
+...     pred = rf_curve.oob_prediction_
+...     oob_rmse_vals.append(float(np.sqrt(np.mean((y_train - pred) ** 2))))
+... 
+RandomForestRegressor(max_features='sqrt', n_estimators=1, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+C:\Users\chansen1\AppData\Local\anaconda3\envs\mlssshort\Lib\site-packages\sklearn\ensemble\_forest.py:611: 
+> UserWarning: Some inputs do not have OOB scores. This probably means too few trees were used to compute an
+> y reliable OOB estimates.
+  warn(
+RandomForestRegressor(max_features='sqrt', n_estimators=1, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=21, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=21, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=41, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=41, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=61, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=61, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=81, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=81, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=101, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=101, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=121, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=121, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=141, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=141, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=161, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=161, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=181, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=181, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=201, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=201, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=221, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=221, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=241, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=241, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=261, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=261, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=281, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=281, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=301, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=301, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=321, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=321, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=341, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=341, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=361, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=361, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=381, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=381, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=401, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=401, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=421, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=421, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=441, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=441, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=461, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=461, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=481, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=481, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=501, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=501, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=521, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=521, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=541, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=541, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=561, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=561, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=581, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=581, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=601, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=601, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=621, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=621, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=641, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=641, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=661, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=661, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=681, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=681, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=701, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=701, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=721, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=721, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=741, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=741, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=761, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=761, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=781, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=781, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=801, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=801, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=821, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=821, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=841, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=841, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=861, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=861, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=881, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=881, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=901, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=901, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=921, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=921, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=941, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=941, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=961, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=961, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=981, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=981, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1001, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1001, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1021, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1021, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1041, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1041, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1061, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1061, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1081, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1081, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1101, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1101, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1121, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1121, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1141, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1141, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1161, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1161, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1181, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1181, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1201, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1201, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1221, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1221, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1241, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1241, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1261, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1261, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1281, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1281, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1301, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1301, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1321, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1321, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1341, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1341, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1361, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1361, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1381, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1381, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1401, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1401, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1421, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1421, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1441, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1441, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1461, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1461, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1481, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1481, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1501, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1501, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1521, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1521, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1541, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1541, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1561, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1561, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1581, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1581, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1601, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1601, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1621, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1621, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1641, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1641, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1661, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1661, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1681, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1681, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1701, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1701, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1721, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1721, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1741, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1741, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1761, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1761, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1781, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1781, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1801, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1801, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1821, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1821, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1841, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1841, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1861, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1861, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1881, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1881, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1901, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1901, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1921, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1921, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1941, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1941, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1961, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1961, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1981, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=1981, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=2001, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+RandomForestRegressor(max_features='sqrt', n_estimators=2001, n_jobs=1,
+                      oob_score=True, random_state=720, warm_start=True)
+>>> fig, ax = plt.subplots(figsize=(7, 4))
+>>> ax.plot(iters, oob_rmse_vals, color="blue")
+[<matplotlib.lines.Line2D object at 0x00000000453C8B30>]
+>>> ax.set_xlabel("Number of Trees (B)")
+Text(0.5, 0, 'Number of Trees (B)')
+>>> ax.set_ylabel("OOB RMSE")
+Text(0, 0.5, 'OOB RMSE')
+>>> fig.tight_layout()
+>>> fig.savefig("..\\Slides\\figures\\Stata_OOB.png", dpi=150)
+>>> plt.close(fig)
+>>> 
+>>> print("")
+
+>>> print("OOB RMSE at selected B:")
+OOB RMSE at selected B:
+>>> sample_pts = list(range(0, len(iters), 10)) + [len(iters) - 1]
+>>> for idx in sample_pts:
+...     print("  B = {:5d}   OOB RMSE = {:.2f}".format(iters[idx], oob_rmse_vals[idx]))
+... 
+... # -----------------------------------------------------------------------------
+  B =     1   OOB RMSE = 63708.20
+  B =   201   OOB RMSE = 51504.03
+  B =   401   OOB RMSE = 51537.18
+  B =   601   OOB RMSE = 51582.61
+  B =   801   OOB RMSE = 51522.07
+  B =  1001   OOB RMSE = 51483.44
+  B =  1201   OOB RMSE = 51389.48
+  B =  1401   OOB RMSE = 51343.02
+  B =  1601   OOB RMSE = 51339.54
+  B =  1801   OOB RMSE = 51315.82
+  B =  2001   OOB RMSE = 51327.26
+  B =  2001   OOB RMSE = 51327.26
+>>> # (b) Tuning-choice table: 6 RFs at n_estimators = 1000
+... # -----------------------------------------------------------------------------
+... specs = [
+...     ("Default",            dict(n_estimators=1000, max_features="sqrt")),
+...     ("No X Randomization", dict(n_estimators=1000, max_features=1.0)),
+...     ("Min Size(20)",       dict(n_estimators=1000, max_features="sqrt", min_samples_leaf=20)),
+...     ("Min Size(40)",       dict(n_estimators=1000, max_features="sqrt", min_samples_leaf=40)),
+...     ("Min Size(80)",       dict(n_estimators=1000, max_features="sqrt", min_samples_leaf=80)),
+...     ("Min Size(160)",      dict(n_estimators=1000, max_features="sqrt", min_samples_leaf=160)),
+... ]
+>>> 
+>>> rows = []
+>>> for name, params in specs:
+...     rf = RandomForestRegressor(
+...         bootstrap=True,
+...         oob_score=True,
+...         random_state=720,
+...         n_jobs=1,
+...         **params,
+...     )
+...     rf.fit(X_train, y_train)
+...     rows.append([name, oob_rmse_of(rf), val_r2(rf)])
+... 
+RandomForestRegressor(max_features='sqrt', n_estimators=1000, n_jobs=1,
+                      oob_score=True, random_state=720)
+RandomForestRegressor(n_estimators=1000, n_jobs=1, oob_score=True,
+                      random_state=720)
+RandomForestRegressor(max_features='sqrt', min_samples_leaf=20,
+                      n_estimators=1000, n_jobs=1, oob_score=True,
+                      random_state=720)
+RandomForestRegressor(max_features='sqrt', min_samples_leaf=40,
+                      n_estimators=1000, n_jobs=1, oob_score=True,
+                      random_state=720)
+RandomForestRegressor(max_features='sqrt', min_samples_leaf=80,
+                      n_estimators=1000, n_jobs=1, oob_score=True,
+                      random_state=720)
+RandomForestRegressor(max_features='sqrt', min_samples_leaf=160,
+                      n_estimators=1000, n_jobs=1, oob_score=True,
+                      random_state=720)
+>>> out = pd.DataFrame(rows, columns=["Model", "OOB RMSE", "Validation R2"])
+>>> print("")
+
+>>> print("Random-forest tuning table (401(k) example):")
+Random-forest tuning table (401(k) example):
+>>> print(out.to_string(
+...     index=False,
+...     formatters={
+...         "OOB RMSE":      lambda x: "{:.0f}".format(x),
+...         "Validation R2": lambda x: "{:.3f}".format(x),
+...     },
+... ))
+             Model OOB RMSE Validation R2
+           Default    51487         0.211
+No X Randomization    53388         0.151
+      Min Size(20)    52057         0.224
+      Min Size(40)    52696         0.219
+      Min Size(80)    53431         0.202
+     Min Size(160)    54128         0.179
+>>> 
+>>> end
+------------------------------------------------------------------------------------------------------------
+
+. 
+. timer off 1
+
+. timer list 1
+   1:    141.38 /        1 =     141.3780
+
+. 
+. log close
+      name:  <unnamed>
+       log:  C:\Users\chansen1\Documents\GitHub\ML_SocSci_short\Stata Code\401kForest.txt
+  log type:  text
+ closed on:  15 Jun 2026, 18:18:04
+------------------------------------------------------------------------------------------------------------

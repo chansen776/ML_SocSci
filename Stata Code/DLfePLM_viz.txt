@@ -1,0 +1,181 @@
+------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  C:\Users\chansen1\Documents\GitHub\ML_SocSci_short\Stata Code\DLfePLM_viz.txt
+  log type:  text
+ opened on:  15 Jun 2026, 21:05:14
+
+. 
+. clear all
+
+. 
+. * ---- Load + prep: identical to DLfePLM.do (order matters) ----
+. import delimited using "..\Data\levitt_ex.dat", clear
+(encoding automatically selected: ISO-8859-1)
+(17 vars, 1,734 obs)
+
+. drop if statenum == 2 | statenum == 9 | statenum == 12
+(102 observations deleted)
+
+. keep if year > 84 & year < 98
+(1,008 observations deleted)
+
+. replace xxincome  = xxincome/100
+(624 real changes made)
+
+. replace xxpover   = xxpover/100
+(624 real changes made)
+
+. replace xxafdc15  = xxafdc15/10000
+(624 real changes made)
+
+. replace xxbeer    = xxbeer/100
+(624 real changes made)
+
+. 
+. * ---- Build the flexible-trend expansion: identical to DLfePLM.do ----
+. xtset statenum year
+
+Panel variable: statenum (strongly balanced)
+ Time variable: year, 85 to 97
+         Delta: 1 unit
+
+. local V "lpc_viol lpc_prop lpc_murd efaviol efaprop efamurd xxprison xxpolice xxunemp xxincome xxpover xxafdc15 xxgunl
+> aw xxbeer"
+
+. foreach v of varlist `V' {
+  2.         bysort statenum (year): gen `v'0 = `v'[1]
+  3.         by statenum: egen `v'bar = mean(`v')
+  4. }
+
+. gen trend1 = (year-85)/12
+
+. gen trend2 = trend1^2
+
+. gen trend3 = trend1^3
+
+. foreach v of varlist `V' {
+  2.         gen tr1X`v'0   = trend1*`v'0
+  3.         gen tr2X`v'0   = trend2*`v'0
+  4.         gen tr3X`v'0   = trend3*`v'0
+  5.         gen tr1X`v'bar = trend1*`v'bar
+  6.         gen tr2X`v'bar = trend2*`v'bar
+  7.         gen tr3X`v'bar = trend3*`v'bar
+  8. }
+
+. 
+. * ---- Double-selection sets from DLfePLM.txt (per crime type) ----
+. * viol
+. local viol_ysel  "tr3Xefaviolbar xxpover xxbeer tr1Xxxpover0"
+
+. local viol_dsel  "tr1Xefaviolbar tr2Xefaviolbar tr3Xefaviol0 xxincome xxbeer tr1Xxxprisonbar tr1Xxxafdc15bar tr2Xxxinc
+> omebar tr3Xxxincomebar"
+
+. local viol_union "tr1Xefaviolbar tr2Xefaviolbar tr3Xefaviol0 tr3Xefaviolbar xxincome xxpover xxbeer tr1Xxxprisonbar tr
+> 1Xxxpover0 tr1Xxxafdc15bar tr2Xxxincomebar tr3Xxxincomebar"
+
+. * prop
+. local prop_ysel  "tr1Xefaprop0 tr1Xxxafdc150 tr2Xxxafdc150 tr3Xxxincome0"
+
+. local prop_dsel  "tr1Xefapropbar xxbeer tr1Xxxprisonbar tr1Xxxincomebar"
+
+. local prop_union "tr1Xefaprop0 tr1Xefapropbar xxbeer tr1Xxxprisonbar tr1Xxxincomebar tr1Xxxafdc150 tr2Xxxafdc150 tr3Xx
+> xincome0"
+
+. * murd
+. local murd_ysel  "tr3Xefamurd0"
+
+. local murd_dsel  "tr2Xefamurdbar tr3Xefamurd0 tr2Xxxincomebar"
+
+. local murd_union "tr2Xefamurdbar tr3Xefamurd0 tr2Xxxincomebar"
+
+. 
+. * The 8 baseline Donohue-Levitt controls (the slide's baseline reghdfe spec,
+. * before the flexible-trend expansion is formed).
+. local DL "xxprison xxpolice xxunemp xxincome xxpover xxafdc15 xxgunlaw xxbeer"
+
+. 
+. * ---- Map each modeled variable to its crime + role ----
+. *   outcome variables use the outcome-equation selection for the fit
+. *   treatment variables use the treatment-equation selection for the fit
+. *   both use the union for the double-selection residual
+. local vars  "lpc_viol lpc_prop lpc_murd efaviol efaprop efamurd"
+
+. local crime_lpc_viol viol
+
+. local crime_lpc_prop prop
+
+. local crime_lpc_murd murd
+
+. local crime_efaviol  viol
+
+. local crime_efaprop  prop
+
+. local crime_efamurd  murd
+
+. local role_lpc_viol  ysel
+
+. local role_lpc_prop  ysel
+
+. local role_lpc_murd  ysel
+
+. local role_efaviol   dsel
+
+. local role_efaprop   dsel
+
+. local role_efamurd   dsel
+
+. 
+. * ---- Compute residuals + post-lasso fits for each variable ----
+. foreach v of local vars {
+  2.         local c  "`crime_`v''"
+  3.         local r  "`role_`v''"
+  4.         local sel   "``c'_`r''"
+  5.         local union "``c'_union'"
+  6. 
+.         * (2) two-way FE residual
+.         quietly reghdfe `v', absorb(statenum year) resid
+  7.         quietly predict double r2_`v', resid
+  8. 
+.         * (3) double-selection residual (FE + year + union controls)
+.         quietly reghdfe `v' `union', absorb(statenum year) resid
+  9.         quietly predict double r3_`v', resid
+ 10. 
+.         * (4) post-lasso fit on original scale = var - residual,
+.         *     where residual is on FE + year + per-equation selected controls
+.         quietly reghdfe `v' `sel', absorb(statenum year) resid
+ 11.         quietly predict double e_`v', resid
+ 12.         gen double fit_`v' = `v' - e_`v'
+ 13.         drop e_`v'
+ 14. 
+.         * (5) DL baseline fit = var on the 8 baseline controls + FE (orig scale)
+.         quietly reghdfe `v' `DL', absorb(statenum year) resid
+ 15.         quietly predict double eb_`v', resid
+ 16.         gen double base_`v' = `v' - eb_`v'
+ 17.         drop eb_`v'
+ 18. 
+.         display "Done: `v'  (crime=`c', fit-on=`r' [`sel'])"
+ 19. }
+Done: lpc_viol  (crime=viol, fit-on=ysel [tr3Xefaviolbar xxpover xxbeer tr1Xxxpover0])
+Done: lpc_prop  (crime=prop, fit-on=ysel [tr1Xefaprop0 tr1Xxxafdc150 tr2Xxxafdc150 tr3Xxxincome0])
+Done: lpc_murd  (crime=murd, fit-on=ysel [tr3Xefamurd0])
+Done: efaviol  (crime=viol, fit-on=dsel [tr1Xefaviolbar tr2Xefaviolbar tr3Xefaviol0 xxincome xxbeer tr1Xxxprisonbar tr1X
+> xxafdc15bar tr2Xxxincomebar tr3Xxxincomebar])
+Done: efaprop  (crime=prop, fit-on=dsel [tr1Xefapropbar xxbeer tr1Xxxprisonbar tr1Xxxincomebar])
+Done: efamurd  (crime=murd, fit-on=dsel [tr2Xefamurdbar tr3Xefamurd0 tr2Xxxincomebar])
+
+. 
+. * ---- Export tidy wide CSV for the Python plotter ----
+. keep statenum year `vars' r2_* r3_* fit_* base_*
+
+. order statenum year `vars' r2_* r3_* fit_* base_*
+
+. export delimited using "..\Data\DLfePLM_viz.csv", replace
+file ..\Data\DLfePLM_viz.csv saved
+
+. 
+. log close
+      name:  <unnamed>
+       log:  C:\Users\chansen1\Documents\GitHub\ML_SocSci_short\Stata Code\DLfePLM_viz.txt
+  log type:  text
+ closed on:  15 Jun 2026, 21:05:15
+------------------------------------------------------------------------------------------------------------------------

@@ -1,0 +1,154 @@
+SOFTWARE FOR THE LECTURES
+=========================
+
+I will be using Stata in these lectures. By "using Stata" I mean I run things in
+Stata but make extensive use of Stata's Python integration and user-supplied
+packages.
+
+I supply Stata code that produces most of the results in the notes. I also
+supply R code that does similar things for most examples, and Python code (the
+Python is the workhorse the Stata and R code call into). I will not be opening
+the R code during lectures, but it is there for reference if R is the language
+you prefer. Some examples are single-language by necessity; that is fine.
+
+All three languages share ONE Python environment: a conda environment named
+`mlssshort` (Python 3.12.7). Stata's Python integration and R's reticulate are
+both pointed at that env, so there is only one set of Python libraries to manage.
+
+You do NOT need all three languages -- pick the one you work in:
+  - Stata users:  sections 1, 2, 3.
+  - R users:      sections 1 and 4.
+  - Python users: section 1.
+
+The code was run on Stata 18.5, R 4.5.0, and the `mlssshort` env:
+  python 3.12.7   scikit-learn 1.8.0   xgboost 3.2.0   pytorch 2.11.0 (CPU build)
+Neural-net demos use PyTorch. There may be errors with substantially different
+versions. See environment.yml / requirements.txt (Python) and
+R Code/install_R_packages.R (R) for the exact versions.
+
+
+===========================================================================
+1) Setting up Python  (EVERYONE needs this -- Stata and R both call into it)
+===========================================================================
+If you have never used Python, don't worry: you will not have to write any
+Python. You install it once so Stata/R/Python can share one set of libraries.
+
+  a. Install Anaconda (a Python distribution + the `conda` package manager).
+     Download the free "Anaconda Distribution" for your OS and run the
+     installer, accepting the defaults:
+         https://www.anaconda.com/download
+     (Miniconda is a smaller alternative:
+         https://docs.conda.io/projects/miniconda/ )
+
+  b. Open a conda terminal:
+       - Windows:      open "Anaconda Prompt" from the Start menu.
+       - macOS/Linux:  open a normal Terminal.
+     You should see "(base)" at the start of the prompt -- conda is active.
+
+  c. Change into the folder that contains this repository (the folder with
+     environment.yml), e.g.:
+         cd "path/to/ML_SocSci_short"
+
+  d. Create the course environment in one command:
+         conda env create -f environment.yml
+     This downloads Python 3.12.7 and every library the course uses
+     (scikit-learn, xgboost, PyTorch, shap, graphviz, ...). It takes a few
+     minutes and creates an environment named `mlssshort`.
+
+  e. Activate it and confirm it works:
+         conda activate mlssshort
+         python -c "import sklearn, xgboost, torch; print('ok')"
+
+  f. Find the env's python.exe path -- you need it to point Stata/R at the env:
+         conda activate mlssshort
+         python -c "import sys; print(sys.executable)"
+     On Windows this looks like:
+         C:\Users\<you>\anaconda3\envs\mlssshort\python.exe
+
+
+===========================================================================
+2) Pointing Stata at the Python environment
+===========================================================================
+Python-with-Stata requires Stata 16 or later. A clear, easy-to-follow guide:
+    https://statalasso.github.io/docs/python/
+
+Point Stata at the `mlssshort` python (use the path from step 1f). The Stata GUI
+is the reliable path; a `, permanently` setting from batch mode does not always
+persist:
+    python set exec "C:/Users/<you>/anaconda3/envs/mlssshort/python.exe" , permanently
+Check inside Stata with:
+    python query
+
+
+===========================================================================
+3) Stata packages I use
+===========================================================================
+net install lassopack, from("https://raw.githubusercontent.com/statalasso/lassopack/master/") replace
+net install pdslasso,  from("https://raw.githubusercontent.com/statalasso/pdslasso/master/") replace
+net install pystacked, from("https://raw.githubusercontent.com/aahrens1/pystacked/main") replace
+net install ddml,      from("https://raw.githubusercontent.com/aahrens1/ddml/master") replace
+ssc install ivreg2
+ssc install ranktest
+ssc install reghdfe
+ssc install ftools
+ssc install colorscatter
+
+  - lassopack provides rlasso / lasso2 / cvlasso (penalized regression).
+  - pdslasso provides pdslasso (post-double-selection); relies on ivreg2 + ranktest.
+  - pystacked + ddml provide stacking and double/debiased ML; ddml's IV models
+    also use ivreg2 / ranktest.
+  - reghdfe (high-dimensional fixed effects) relies on ftools.
+  - colorscatter is used only for the tree-partition scatter illustration.
+
+Tree visualization uses `python-graphviz`, already bundled in environment.yml
+(in the `mlssshort` env). I am unlikely to run it live.
+
+
+===========================================================================
+4) Setting up R  (only if you want to run the R code)
+===========================================================================
+The R scripts were written and tested on:
+    R 4.5.0 (2025-04-11 ucrt)
+Get R from https://cloud.r-project.org  (RStudio optional:
+https://posit.co/download/rstudio-desktop/ ).
+
+  a. Install the R packages the course uses. From a terminal:
+         Rscript "R Code/install_R_packages.R"
+     or inside an R session:
+         source("R Code/install_R_packages.R")
+     This installs the ~22 packages the scripts need (glmnet, ranger,
+     randomForest, xgboost, rpart, treeshap, shapviz, reticulate, ...). It
+     installs the latest CRAN version of anything missing, does NOT downgrade
+     packages you already have, and prints the installed versions at the end.
+
+  b. Versioning. The exact versions the decks' R code was run against are listed
+     at the top of R Code/install_R_packages.R (e.g. glmnet 4.1.9, ranger 0.17.0,
+     xgboost 1.7.11.1, reticulate 1.42.0). Minor differences are usually fine.
+     For a strict, reproducible lockfile, use renv:
+         install.packages("renv"); renv::init()    # then commit renv.lock
+         renv::restore()                            # to reproduce elsewhere
+
+  c. R calls Python through reticulate, pointed at the SAME `mlssshort` env from
+     section 1. R Code/setup_reticulate.R finds that env automatically on a
+     standard Anaconda install; if it cannot, set the environment variable
+     MLSSSHORT_PY (or RETICULATE_PYTHON) to the python.exe path from step 1f.
+
+
+===========================================================================
+5) If things are not working
+===========================================================================
+Stata packages:
+  . ado dir                      (confirm packages are present)
+  . ado uninstall [id]           (then restart Stata and reinstall)
+
+Python packages:
+  Make sure packages are installed into the env LINKED to Stata (`mlssshort`).
+  In Stata, `python query` shows which interpreter is active. Recreating the env
+  is the cleanest fix:
+    conda env remove -n mlssshort
+    conda env create -f environment.yml
+
+R packages:
+  Re-run  Rscript "R Code/install_R_packages.R".
+  If reticulate cannot find Python, set MLSSSHORT_PY to the mlssshort python.exe
+  path (section 1f) -- see R Code/setup_reticulate.R.

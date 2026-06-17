@@ -1,0 +1,60 @@
+# Pip-only install path for the short-course Python env (fallback for students
+# who do not use conda). Prefer environment.yml + conda for the binary packages
+# (graphviz binary, pyarrow). Versions are the exact tested set (Python 3.12.7,
+# captured 2026-06-15).
+#
+# Recommended install:
+#   python -m venv .venv
+#   .venv\Scripts\activate            # (Windows)  OR:  source .venv/bin/activate
+#   python -m pip install --upgrade pip
+#   pip install -r requirements.txt
+#
+# PyTorch is the CPU build: the index-url line below points pip at the CPU wheel.
+# Tree visualization (graphviz) also needs the Graphviz *binary* on PATH; with
+# pip, install it separately from https://graphviz.org/download/.
+
+# Core scientific Python
+numpy==2.0.2
+pandas==3.0.2
+scipy==1.17.1
+scikit-learn==1.8.0
+statsmodels==0.14.6
+matplotlib==3.10.8
+seaborn==0.13.2
+patsy==1.0.2
+joblib==1.4.2
+numba==0.65.0
+numexpr==2.14.1
+bottleneck==1.6.0
+pyarrow==24.0.0
+
+# Notebooks
+jupyterlab==4.2.5
+notebook==7.2.2
+ipykernel==6.28.0
+
+# PyTorch (CPU build)
+--index-url https://download.pytorch.org/whl/cpu
+--extra-index-url https://pypi.org/simple
+torch==2.11.0
+torchvision==0.26.0
+
+# Hugging Face stack
+transformers==5.6.0
+datasets==4.8.4
+
+# Gradient boosting + panel/IV econometrics
+xgboost==3.2.0
+linearmodels==7.0
+
+# Double/debiased machine learning
+doubleml==0.10.0
+
+# Interpretation
+shap==0.51.0
+
+# Reading .RData files from R
+pyreadr==0.5.3
+
+# Tree visualization (requires the Graphviz binary on PATH — install separately)
+graphviz==0.21

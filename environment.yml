@@ -1,0 +1,70 @@
+# Conda environment for the ML/AI-for-social-science short course (Python side).
+#
+# Versions below are the exact ones the current decks' code was tested with
+# (env name `mlssshort`, Python 3.12.7, captured 2026-06-15). This is the
+# canonical Python environment; R (reticulate) and Stata (python integration)
+# both call into this same env — see "Note on Software for Lectures.txt".
+#
+# Create:   conda env create -f environment.yml
+# Update:   conda env update -n mlssshort -f environment.yml --prune
+# Register as a Jupyter kernel:
+#           conda activate mlssshort
+#           python -m ipykernel install --user --name mlssshort
+
+name: mlssshort
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.12.7
+  - pip
+
+  # Core scientific Python
+  - numpy=2.0.2
+  - pandas=3.0.2
+  - scipy=1.17.1
+  - scikit-learn=1.8.0
+  - statsmodels=0.14.6
+  - matplotlib=3.10.8
+  - seaborn=0.13.2
+  - patsy=1.0.2
+  - joblib=1.4.2
+  - numba=0.65.0
+  - numexpr=2.14.1
+  - bottleneck=1.6.0
+  - pyarrow=24.0.0
+
+  # Notebooks
+  - jupyterlab=4.2.5
+  - notebook=7.2.2
+  - ipykernel=6.28.0
+
+  # Tree visualization (bundles the graphviz binary + Python bindings)
+  - python-graphviz=0.21
+
+  # Reading .RData files exported from R
+  - pyreadr=0.5.3
+
+  # Pip-installed packages (PyTorch CPU build + HF stack + econometrics/ML
+  # not reliably on conda-forge at the pinned versions)
+  - pip:
+      # PyTorch CPU build from the PyTorch wheel index
+      - --index-url https://download.pytorch.org/whl/cpu
+      - --extra-index-url https://pypi.org/simple
+      - torch==2.11.0
+      - torchvision==0.26.0
+
+      # Hugging Face stack (transformers / attention demo, X-ray transfer learning)
+      - transformers==5.6.0
+      - datasets==4.8.4
+
+      # Gradient boosting and panel/IV econometrics
+      - xgboost==3.2.0
+      - linearmodels==7.0
+
+      # Double/debiased machine learning
+      - doubleml==0.10.0
+
+      # Interpretation (SHAP)
+      - shap==0.51.0

@@ -1,0 +1,224 @@
+------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  C:\Users\chansen1\Documents\GitHub\ML_SocSci_short\Stata Code\401kInterpret.txt
+  log type:  text
+ opened on:  15 Jun 2026, 18:23:49
+
+. 
+. clear all
+
+. 
+. timer on 1
+
+. 
+. use "..\Data\sipp1991.dta", clear   /* assumes cwd is Stata Code\ */
+
+. 
+. * Normalize inc, age, fsize, educ to roughly [0,1].
+. replace age   = age / 64
+variable age was byte now float
+(9,915 real changes made)
+
+. replace inc   = inc / 250000
+(9,912 real changes made)
+
+. replace fsize = fsize / 13
+variable fsize was byte now float
+(9,915 real changes made)
+
+. replace educ  = educ / 18
+variable educ was byte now float
+(9,915 real changes made)
+
+. 
+. * Set seed and split ~80/20.
+. set seed 71423
+
+. gen trdata = runiform()
+
+. replace trdata = trdata < .8
+(9,915 real changes made)
+
+. 
+. count if trdata
+  7,854
+
+. count if !trdata
+  2,061
+
+. 
+. 
+. ****************************************************************************
+. * All RF interpretation work happens in embedded Python.
+. 
+. python:
+----------------------------------------------- python (type end to exit) ----------------------------------
+>>> 
+>>> from sfi import Data
+>>> import numpy as np
+>>> import pandas as pd
+>>> from sklearn.ensemble import RandomForestRegressor as rf
+>>> from sklearn.inspection import permutation_importance as permimp
+>>> from sklearn.inspection import partial_dependence as partdep
+>>> import shap
+>>> 
+>>> # Pull data from Stata.
+... X = np.array(Data.get("e401 age inc educ fsize marr twoearn db pira hown"))
+>>> y = np.array(Data.get("net_tfa"))
+>>> T = np.array(Data.get("trdata"))
+>>> 
+>>> Xcols = np.array(["e401", "age", "inc", "educ", "fsize", "marr",
+...                   "twoearn", "db", "pira", "hown"])
+>>> p = X.shape[1]
+>>> 
+>>> Xtrain, ytrain = X[T == 1], y[T == 1]
+>>> Xtest,  ytest  = X[T == 0], y[T == 0]
+>>> 
+>>> print(f"ntrain={len(Xtrain)}  ntest={len(Xtest)}  features={p}")
+ntrain=7854  ntest=2061  features=10
+>>> 
+>>> # Random forest. n_jobs=1 -- joblib-loky backend hangs inside Stata's
+... # embedded Python on Windows (see PLAN section 5, session 6).
+... reg = rf(n_estimators=500, min_samples_leaf=20, random_state=720, n_jobs=1)
+>>> reg.fit(Xtrain, ytrain)
+RandomForestRegressor(min_samples_leaf=20, n_estimators=500, n_jobs=1,
+                      random_state=720)
+>>> 
+>>> print(f"RF train R^2: {reg.score(Xtrain, ytrain):.3f}")
+RF train R^2: 0.345
+>>> print(f"RF test  R^2: {reg.score(Xtest,  ytest):.3f}")
+RF test  R^2: 0.223
+>>> 
+>>> 
+>>> ############################################################
+... # Permutation variable importance (sklearn).
+>>> rfimp = permimp(reg, Xtest, ytest, n_repeats=100, random_state=720, n_jobs=1)
+>>> 
+>>> print("\nPermutation VI (decrease in R^2, sorted):")
+
+Permutation VI (decrease in R^2, sorted):
+>>> for i in rfimp.importances_mean.argsort()[::-1]:
+...     print(f"  {Xcols[i]:<8}  {rfimp.importances_mean[i]:7.4f}"
+...           f"  +/- {rfimp.importances_std[i]:7.4f}")
+... 
+... 
+... ############################################################
+  inc        0.1954  +/-  0.0178
+  pira       0.0990  +/-  0.0153
+  age        0.0450  +/-  0.0095
+  twoearn    0.0116  +/-  0.0039
+  e401       0.0091  +/-  0.0023
+  educ       0.0016  +/-  0.0011
+  hown       0.0006  +/-  0.0003
+  db        -0.0000  +/-  0.0006
+  marr      -0.0000  +/-  0.0005
+  fsize     -0.0002  +/-  0.0009
+>>> # Partial dependence on income (continuous) and pira (binary).
+>>> pdrf_inc = partdep(reg, features=[2], X=X, categorical_features=(0,4,5,6,7,8,9))
+>>> pdrf_inc_x = np.asarray(pdrf_inc.grid_values[0]) * 250000   # un-normalize income
+>>> pdrf_inc_y = np.asarray(pdrf_inc.average[0])
+>>> 
+>>> print("\nPartial dependence (RF) on income, 10k grid:")
+
+Partial dependence (RF) on income, 10k grid:
+>>> for xv, yv in zip(pdrf_inc_x[::3], pdrf_inc_y[::3]):
+...     print(f"  inc={int(xv):>9,}    avg pred net assets={float(yv):>9,.0f}")
+... 
+  inc=    8,881    avg pred net assets=    5,713
+  inc=   11,229    avg pred net assets=    5,827
+  inc=   13,578    avg pred net assets=    6,199
+  inc=   15,927    avg pred net assets=    6,502
+  inc=   18,275    avg pred net assets=    6,358
+  inc=   20,624    avg pred net assets=    6,238
+  inc=   22,972    avg pred net assets=    6,359
+  inc=   25,321    avg pred net assets=    8,728
+  inc=   27,669    avg pred net assets=    9,412
+  inc=   30,018    avg pred net assets=   10,272
+  inc=   32,366    avg pred net assets=   11,234
+  inc=   34,715    avg pred net assets=   11,732
+  inc=   37,063    avg pred net assets=   12,600
+  inc=   39,412    avg pred net assets=   13,424
+  inc=   41,760    avg pred net assets=   12,454
+  inc=   44,109    avg pred net assets=   15,023
+  inc=   46,457    avg pred net assets=   15,637
+  inc=   48,806    avg pred net assets=   19,657
+  inc=   51,154    avg pred net assets=   20,523
+  inc=   53,503    avg pred net assets=   18,992
+  inc=   55,851    avg pred net assets=   19,970
+  inc=   58,200    avg pred net assets=   22,510
+  inc=   60,548    avg pred net assets=   22,435
+  inc=   62,897    avg pred net assets=   22,691
+  inc=   65,246    avg pred net assets=   23,333
+  inc=   67,594    avg pred net assets=   31,197
+  inc=   69,943    avg pred net assets=   40,438
+  inc=   72,291    avg pred net assets=   42,190
+  inc=   74,640    avg pred net assets=   43,395
+  inc=   76,988    avg pred net assets=   44,122
+  inc=   79,337    avg pred net assets=   43,630
+  inc=   81,685    avg pred net assets=   43,957
+  inc=   84,034    avg pred net assets=   42,482
+  inc=   86,382    avg pred net assets=   42,619
+>>> pdrf_pira = partdep(reg, features=[8], X=X, categorical_features=(0,4,5,6,7,8,9))
+>>> print(f"\nPD pira = 0:  {pdrf_pira.average[0][0]:8.0f}"
+...       f"    pira = 1:  {pdrf_pira.average[0][1]:8.0f}")
+... 
+
+PD pira = 0:      6361    pira = 1:     53994
+>>> pdrf_e401 = partdep(reg, features=[0], X=X, categorical_features=(0,4,5,6,7,8,9))
+>>> print(f"PD e401 = 0:  {pdrf_e401.average[0][0]:8.0f}"
+...       f"    e401 = 1:  {pdrf_e401.average[0][1]:8.0f}")
+... 
+... 
+... ############################################################
+PD e401 = 0:     15361    e401 = 1:     21842
+>>> # SHAP via TreeExplainer (exact, fast for tree ensembles).
+>>> explainer   = shap.TreeExplainer(reg)
+>>> shap_values = explainer(Xtest)
+>>> 
+>>> expected = float(np.asarray(explainer.expected_value).item())
+>>> print(f"\nSHAP expected value E[g(X)]: {expected:.4f}")
+
+SHAP expected value E[g(X)]: 17887.2285
+>>> 
+>>> # Sanity check: g(x_i) = E[g(X)] + sum_j phi_j(x_i)
+... recon = expected + shap_values.values[0].sum()
+>>> print(f"SHAP check (obs 0):  baseline + sum(phi) = {recon:.4f}"
+...       f"    model pred = {reg.predict(Xtest[[0]])[0]:.4f}")
+... 
+SHAP check (obs 0):  baseline + sum(phi) = -596.7698    model pred = -596.7698
+>>> mean_abs = np.abs(shap_values.values).mean(axis=0)
+>>> print("\nMean |SHAP| importance ranking:")
+
+Mean |SHAP| importance ranking:
+>>> for j in np.argsort(-mean_abs):
+...     print(f"  {Xcols[j]:<8}  {mean_abs[j]:8.1f}")
+... 
+  pira       13756.6
+  inc        10714.5
+  age         5729.5
+  twoearn     2756.6
+  e401        2681.3
+  hown         933.7
+  fsize        676.4
+  educ         651.8
+  marr         366.6
+  db           137.8
+>>> end
+------------------------------------------------------------------------------------------------------------
+
+. 
+. 
+. timer off 1
+
+. timer list
+   1:    145.61 /        1 =     145.6140
+
+. timer clear
+
+. 
+. log close
+      name:  <unnamed>
+       log:  C:\Users\chansen1\Documents\GitHub\ML_SocSci_short\Stata Code\401kInterpret.txt
+  log type:  text
+ closed on:  15 Jun 2026, 18:26:15
+------------------------------------------------------------------------------------------------------------

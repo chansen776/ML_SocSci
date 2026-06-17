@@ -1,0 +1,125 @@
+------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  C:\Users\chansen1\Documents\GitHub\ML_SocSci_short\Stata Code\401kHTE.txt
+  log type:  text
+ opened on:  15 Jun 2026, 21:05:15
+
+. 
+. clear all
+
+. set more off
+
+. 
+. * ---- (1) Stata-native: load data + naive eligibility ATE -------------------
+. import delimited using "../Data/restatw.dat", delimiter(whitespace) ///
+>     varnames(1) clear
+(encoding automatically selected: ISO-8859-2)
+(75 vars, 9,915 obs)
+
+. quietly count
+
+. display as text "loaded restatw.dat: N = " as result r(N)
+loaded restatw.dat: N = 9915
+
+. * Naive ATE of 401(k) eligibility on net financial assets (no controls):
+. regress net_tfa e401, robust
+
+Linear regression                               Number of obs     =      9,915
+                                                F(1, 9913)        =     191.63
+                                                Prob > F          =     0.0000
+                                                R-squared         =     0.0221
+                                                Root MSE          =      62819
+
+------------------------------------------------------------------------------
+             |               Robust
+     net_tfa | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+        e401 |   19559.34   1412.921    13.84   0.000     16789.73    22328.96
+       _cons |   10788.04   690.5631    15.62   0.000       9434.4    12141.69
+------------------------------------------------------------------------------
+
+. 
+. * ---- (2) Drive the HTE pipeline through Stata's Python integration ---------
+. * python query   // (uncomment to confirm Stata points at the mlssshort exe)
+. python:
+----------------------------------------------- python (type end to exit) ----------------------------------------------
+>>> import importlib.util
+>>> from pathlib import Path
+>>> 
+>>> # Locate the canonical pipeline whether Stata's CWD is the repo root or the
+... # "Stata Code" subfolder.
+... cands = [Path.cwd() / "Python code" / "401kHTE.py",
+...          Path.cwd().parent / "Python code" / "401kHTE.py"]
+>>> src = next((c for c in cands if c.exists()), None)
+>>> if src is None:
+...     raise FileNotFoundError("Could not find 'Python code/401kHTE.py' from "
+...                             f"Stata CWD = {Path.cwd()}")
+... 
+>>> spec = importlib.util.spec_from_file_location("hte401k", str(src.resolve()))
+>>> mod = importlib.util.module_from_spec(spec)
+>>> spec.loader.exec_module(mod)   # runs imports; main() guarded by __main__
+>>> mod.main()                     # reproduces every frame + writes the figures
+loaded restatw.dat: n=9915, P(D=1)=0.371, raw diff in means = 19,559
+cross-fitted: mu in [0.085,0.826]; DR-ATE = mean Y(eta) = 8,282.9 (se 1,160.6)
+
+GATES by income quintile (95%):
+ income_quintile    GATE     se
+             Q1  4267.0  723.0
+             Q2   989.0 1764.0
+             Q3  5289.0 1301.0
+             Q4 10588.0 2341.0
+             Q5 20282.0 4770.0
+CATE(log-income) cubic BLP; uniform sup-t crit = 2.23
+
+split: train=5949, val=1983, test=1983
+
+slide 73 distillation tree: leaf CATEs span ~-2,741 to ~13,144
+
+Model selection on validation (normalized DR-loss improvement, 68%):
+                      model  norm_score    se  beats_constant_68
+ Boosting (d4, early-stop)       0.010 0.013              False
+      Linear (age, income)       0.002 0.001               True
+  Random forest (mtry=p/3)       0.001 0.002              False
+Regularized linear (Ridge)       0.000 0.001              False
+  selected (best non-constant) model: Boosting (d4, early-stop)
+
+Heterogeneity test on validation (slope of Y(eta) on tau_k; 68%=+/-1se):
+                      model  ATE(intercept)  slope   se    t
+ Boosting (d4, early-stop)        12458.25   1.41 1.22 1.15
+      Linear (age, income)        12458.25   6.66 4.13 1.61
+  Random forest (mtry=p/3)        12458.25   0.87 0.63 1.38
+Regularized linear (Ridge)        12458.25   1.36 2.10 0.64
+
+RATE / AUTOC on validation (one-sided 68% lower bound):
+                      model  AUTOC     se  lo_68_1sided
+ Boosting (d4, early-stop) 7262.0 3970.0        5405.0
+      Linear (age, income) 9441.0 4872.0        7162.0
+  Random forest (mtry=p/3) 4402.0 2712.0        3133.0
+Regularized linear (Ridge) 1955.0 3854.0         152.0
+
+slide 77 policy tree: treats 94% of training units
+
+Policy value on TEST (gain over treating no one, 68%=+/-1se):
+                  policy treated_frac  value_gain   se
+             Treat none           0%           0    0
+              Treat all         100%       12751 2050
+       Boosting: CATE>0          98%       12621 1975
+      Boosting: top 50%          51%        9680 1863
+            Policy tree          94%       11069 1921
+Policy tree: 50% budget          50%        8009 1778
+             Random 50%          50%        5969 1258
+  Boosting top-50% vs random-50%: 3,710 (se 1,634)
+  policy-tree 50% budget vs random-50%: 2,039 (se 1,633)
+  Boostings CATE>0 vs treat-all: -130 (se 552)
+
+saved figures -> C:\Users\chansen1\Documents\GitHub\ML_SocSci_short\Slides\figures/HTE_401k_*.png
+>>> end
+------------------------------------------------------------------------------------------------------------------------
+
+. 
+. log close
+      name:  <unnamed>
+       log:  C:\Users\chansen1\Documents\GitHub\ML_SocSci_short\Stata Code\401kHTE.txt
+  log type:  text
+ closed on:  15 Jun 2026, 21:14:22
+------------------------------------------------------------------------------------------------------------------------

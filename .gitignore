@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# R
+.Rhistory
+.RData
+Rplots.pdf
+
+# OS / editor
+.DS_Store
+
+# Regenerated data outputs (produced by running the code; baseline data is tracked)
+Data/401kATE.dta
+Data/401kLATE.dta
+Data/mwDiD.dta
+Data/*_python.parquet
+Data/*_R.csv
+Data/mw_data_ch.csv
+Data/DLfePLM_viz.csv
+Data/InferenceOverviewSimExtended.csv
+Data/InferenceOverviewSimExtended_R.csv
+Data/InferenceOverviewSimExtended_stata.csv
+
+# Script scratch output
+notes/
