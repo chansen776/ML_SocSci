@@ -6,8 +6,8 @@ for causal inference (Day 2).
 
 ## Contents
 
-- **`ML Primer.pdf`** — Day 1 slides (the ML primer).
-- **`ML and Causal Inference.pdf`** — Day 2 slides (ML + causal inference).
+- **`ML Primer.pdf`** — Day 1 slides.
+- **`ML and Causal Inference.pdf`** — Day 2 slides.
 - **`Python code/`, `R Code/`, `Stata Code/`** — code reproducing the examples in
   each language. Most examples appear in all three; some are single-language.
   Each directory has a `run_all` script.
